@@ -1,0 +1,29 @@
+# ── Secrets & local config ───────────────────────────────────────────
+.env
+.env.*
+*.local
+# (env.example is intentionally tracked as the template)
+
+# ── Music library & runtime data (large / generated, not source) ──────
+/music/
+/data/
+
+# ── Python (gateway) ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# ── Node / frontend ───────────────────────────────────────────────────
+node_modules/
+dist/
+dev-dist/
+
+# ── OS / editor cruft ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

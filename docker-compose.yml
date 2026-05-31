@@ -1,0 +1,50 @@
+networks:
+  music_net:
+    driver: bridge
+
+volumes:
+  navidrome_data:
+
+services:
+
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    restart: unless-stopped
+    #user: "${PUID}:${PGID}"
+    networks: [music_net]
+    ports:
+      - "4533:4533"
+    environment:
+      ND_LOGLEVEL: info
+      ND_SCANSCHEDULE: 1m
+      ND_SESSIONTIMEOUT: 24h
+      ND_ENABLETRANSCODINGCONFIG: "true"
+      ND_TRANSCODINGCACHESIZE: 1000MB
+    volumes:
+      - navidrome_data:/data
+      - ./music:/music:ro
+
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    restart: unless-stopped
+    networks: [music_net]
+    ports:
+      - "4040:8080"
+    environment:
+      NAVIDROME_URL:   http://navidrome:4533
+      NAVIDROME_USER:  ${NAVIDROME_ADMIN_USER}
+      NAVIDROME_PASS:  ${NAVIDROME_ADMIN_PASS}
+      DEEZER_ARL:      ${DEEZER_ARL}
+      DEEMIX_BITRATE:  ${DEEMIX_BITRATE:-320}
+      MUSIC_DIR:       /music
+      DB_PATH:         /data/gateway.db
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      LOG_LEVEL:       INFO
+    volumes:
+      - ./music:/music
+      - ./data/deemix:/root/.config/deemix
+      - ./data:/data
+    depends_on:
+      - navidrome

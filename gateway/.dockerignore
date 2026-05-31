@@ -1,0 +1,17 @@
+# Keep the build context small and reproducible. The frontend deps and dist are
+# rebuilt inside the image; the Python venv and tests never belong in it.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+conftest.py
+pytest.ini
+
+frontend/node_modules/
+frontend/dist/
+frontend/dev-dist/
+
+.git/
+.gitignore
+README.md
