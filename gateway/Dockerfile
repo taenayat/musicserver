@@ -18,7 +18,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git \
+        ca-certificates git ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -28,4 +28,4 @@ COPY *.py ./
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 
 EXPOSE 8080
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info", "--access-log"]

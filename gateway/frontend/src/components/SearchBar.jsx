@@ -3,7 +3,7 @@ import { SearchIcon, CloseIcon } from './Icons';
 
 // Controlled search input. Autofocuses on mount and debounces nothing itself —
 // the parent decides when to fire the query (on submit / debounced value).
-export default function SearchBar({ value, onChange, onSubmit }) {
+export default function SearchBar({ value, onChange, onSubmit, placeholder = 'Search Deezer…' }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function SearchBar({ value, onChange, onSubmit }) {
         autoComplete="off"
         autoCorrect="off"
         spellCheck={false}
-        placeholder="Search Deezer…"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-full bg-card pl-10 pr-10 py-3 text-base text-gray-100

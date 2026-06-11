@@ -90,6 +90,14 @@ class DeezerClient:
         track = await self.get_track(track_id)
         return track.get("preview", "") if isinstance(track, dict) else ""
 
+    # ── radio / recommendations ─────────────────────────────────────────────
+    # NB: Deezer has no working per-track radio endpoint, so radio.py resolves
+    # track/album seeds to their artist and uses artist radio below.
+
+    async def get_artist_radio(self, artist_id: int, limit: int = 25) -> list:
+        data = await self._get(f"/artist/{artist_id}/radio", limit=limit)
+        return data.get("data", []) if isinstance(data, dict) else []
+
     # ── internal ──────────────────────────────────────────────────────────────
 
     def _cache_key(self, path: str, params: dict) -> str:

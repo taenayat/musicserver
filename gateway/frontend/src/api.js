@@ -1,19 +1,19 @@
-// api.js — the single source of every network call.
+// api.js — single source of every network call.
 //
-// The API key lives in localStorage and is attached as `Authorization: Bearer`
-// to every request. A global 401 handler lets App.jsx bounce the user back to
-// the login screen if the key is ever rejected.
+// The session token lives in localStorage and is attached as
+// `Authorization: Bearer` to every request. A global 401 handler lets the auth
+// layer bounce the user back to the login screen if the session is rejected.
 
-const KEY_STORAGE = 'gateway_api_key';
+const TOKEN_STORAGE = 'gateway_token';
 
-export function getKey() {
-  return localStorage.getItem(KEY_STORAGE) || '';
+export function getToken() {
+  return localStorage.getItem(TOKEN_STORAGE) || '';
 }
-export function setKey(key) {
-  localStorage.setItem(KEY_STORAGE, key);
+export function setToken(t) {
+  localStorage.setItem(TOKEN_STORAGE, t);
 }
-export function clearKey() {
-  localStorage.removeItem(KEY_STORAGE);
+export function clearToken() {
+  localStorage.removeItem(TOKEN_STORAGE);
 }
 
 let unauthorizedHandler = () => {};
@@ -22,7 +22,8 @@ export function onUnauthorized(fn) {
 }
 
 function authHeaders(extra = {}) {
-  return { Authorization: `Bearer ${getKey()}`, ...extra };
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}`, ...extra } : { ...extra };
 }
 
 async function request(path, opts = {}) {
@@ -32,42 +33,127 @@ async function request(path, opts = {}) {
     throw new Error('Unauthorized');
   }
   if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`);
+    let detail = `Request failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(detail);
+    err.status = res.status;
+    throw err;
   }
   return res;
 }
 
-// Validate a key against /health (used only by the login screen). Returns true
-// if the key is accepted. Does not persist anything.
-export async function validateKey(key) {
-  const res = await fetch('/health', { headers: { Authorization: `Bearer ${key}` } });
-  return res.ok;
+function jget(path) {
+  return request(path).then((r) => r.json());
+}
+function jpost(path, body) {
+  return request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }).then((r) => (r.status === 204 ? null : r.json()));
+}
+function jpatch(path, body) {
+  return request(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+}
+function jdelete(path) {
+  return request(path, { method: 'DELETE' });
+}
+
+export async function getHealth() {
+  const res = await fetch('/health');
+  return res.json();
 }
 
 export const api = {
-  search: (q, limit = 20) =>
-    request(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`).then((r) => r.json()),
-
-  artist: (id) => request(`/api/artist/${id}`).then((r) => r.json()),
-
-  album: (id) => request(`/api/album/${id}`).then((r) => r.json()),
-
-  queue: (limit = 50) =>
-    request(`/api/queue?limit=${limit}`).then((r) => r.json()),
-
-  download: (item) =>
-    request('/api/download', {
+  // auth
+  login: (username, password) =>
+    fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
-    }).then((r) => r.json()),
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => jpost('/api/auth/logout'),
+  me: () => jget('/api/auth/me'),
+  changeMyPassword: (current_password, new_password) =>
+    jpatch('/api/auth/me/password', { current_password, new_password }),
+  createFirstAdmin: (username, password) =>
+    fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, role: 'admin' }),
+    }),
 
-  deleteQueueItem: (id) => request(`/api/queue/${id}`, { method: 'DELETE' }),
+  // status
+  status: () => jget('/api/status'),
 
-  // Binary helpers — fetched with the auth header, returned as object URLs so
-  // <img>/<audio> (which can't send headers) can use them.
+  // search + browse
+  search: (q, limit = 20) =>
+    jget(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  searchYoutube: (q, limit = 10) =>
+    jget(`/api/search/youtube?q=${encodeURIComponent(q)}&limit=${limit}`),
+  artist: (id) => jget(`/api/artist/${id}`),
+  album: (id) => jget(`/api/album/${id}`),
+
+  // downloads
+  download: (item) => jpost('/api/download', item),
+  queue: (limit = 50, offset = 0) => jget(`/api/queue?limit=${limit}&offset=${offset}`),
+  deleteQueueItem: (id) => jdelete(`/api/queue/${id}`),
+
+  // library
+  libraryStats: () => jget('/api/library/stats'),
+  syncLibrary: () => jpost('/api/admin/library/scan'),
+  deleteTrack: (id) => jdelete(`/api/library/tracks/${id}`),
+  deleteAlbum: (id) => jdelete(`/api/library/albums/${id}`),
+
+  // radio
+  radioList: () => jget('/api/radio'),
+  radioStart: (seed) => jpost('/api/radio', seed),
+  radioLike: (sessionId, deezer_track_id) =>
+    jpost(`/api/radio/${sessionId}/like`, { deezer_track_id }),
+  radioDismiss: (sessionId) => jpost(`/api/radio/${sessionId}/dismiss`),
+
+  // lyrics
+  lyrics: ({ track_id, title, artist, album, duration }) =>
+    jget(
+      `/api/lyrics?track_id=${track_id || 0}&title=${encodeURIComponent(title || '')}` +
+        `&artist=${encodeURIComponent(artist || '')}&album=${encodeURIComponent(album || '')}` +
+        `&duration=${duration || 0}`,
+    ),
+
+  // cache
+  cacheStatus: () => jget('/api/cache/status'),
+  cacheRecall: (file_path) => jpost('/api/cache/recall', { file_path }),
+  cacheEvict: () => jpost('/api/admin/cache/evict'),
+  cacheRecallAll: () => jpost('/api/admin/cache/recall-all'),
+
+  // admin
+  adminStatus: () => jget('/api/admin/status'),
+  adminLogs: (lines = 100) => jget(`/api/admin/logs?lines=${lines}`),
+  adminUsers: () => jget('/api/admin/users'),
+  createUser: (username, password, role) =>
+    jpost('/api/admin/users', { username, password, role }),
+  patchUser: (id, patch) => jpatch(`/api/admin/users/${id}`, patch),
+  deleteUser: (id) => jdelete(`/api/admin/users/${id}`),
+  navScan: () => jpost('/api/admin/scan'),
+  clearQueue: () => jpost('/api/admin/clear-queue'),
+  telegramBackfill: () => jpost('/api/admin/telegram/backfill'),
+  artBackfill: () => jpost('/api/admin/art/backfill'),
+  lyricsBackfill: () => jpost('/api/admin/lyrics/backfill'),
+  artMissing: () => jget('/api/admin/art/missing'),
+  artApply: (track_ids) => jpost('/api/admin/art/apply', { track_ids }),
+  metrics: (hours = 24) => jget(`/api/admin/metrics?hours=${hours}`),
+
+  // binary helpers — fetched with auth, returned as object URLs.
   coverBlob: (url, size = 'md') =>
     request(`/api/cover?url=${encodeURIComponent(url)}&size=${size}`).then((r) => r.blob()),
-
   previewBlob: (id) => request(`/api/preview/${id}`).then((r) => r.blob()),
 };

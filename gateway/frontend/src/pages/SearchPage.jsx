@@ -5,6 +5,7 @@ import AlbumCard from '../components/AlbumCard';
 import TrackRow from '../components/TrackRow';
 import { SearchIcon } from '../components/Icons';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const INITIAL = 5;
 
@@ -12,7 +13,7 @@ function Section({ title, action, children }) {
   return (
     <section>
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">{title}</h2>
         {action}
       </div>
       {children}
@@ -20,7 +21,6 @@ function Section({ title, action, children }) {
   );
 }
 
-// A section that initially shows INITIAL items and expands inline on "Show more".
 function ExpandableSection({ title, items, children }) {
   const [expanded, setExpanded] = useState(false);
   const limit = expanded ? items.length : INITIAL;
@@ -30,26 +30,32 @@ function ExpandableSection({ title, items, children }) {
         {expanded ? 'Show less' : 'Show more'}
       </button>
     ) : null;
-  return (
-    <Section title={title} action={action}>
-      {children(limit)}
-    </Section>
-  );
+  return <Section title={title} action={action}>{children(limit)}</Section>;
 }
 
 export default function SearchPage() {
+  const { health } = useAuth();
+  const ytEnabled = health?.ytdlp_enabled;
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState(null);
+  const [source, setSource] = useState('deezer'); // 'deezer' | 'youtube'
+  const [results, setResults] = useState(null); // Deezer shape { artists, albums, tracks }
+  const [yt, setYt] = useState(null); // array of YouTube tracks
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const reqId = useRef(0);
 
-  // Debounced search: fire 350ms after the user stops typing. A monotonically
-  // increasing request id guards against out-of-order responses.
+  // If YouTube support is toggled off in health, fall back to Deezer.
+  useEffect(() => {
+    if (!ytEnabled && source === 'youtube') setSource('deezer');
+  }, [ytEnabled, source]);
+
+  // Debounced search against the active source. Switching source re-runs the
+  // query and the inactive source's results are cleared so they never mix.
   useEffect(() => {
     const q = query.trim();
     if (!q) {
       setResults(null);
+      setYt(null);
       setLoading(false);
       setError(false);
       return;
@@ -58,47 +64,76 @@ export default function SearchPage() {
     setError(false);
     const myId = ++reqId.current;
     const t = setTimeout(() => {
-      api
-        .search(q, 20)
+      const req = source === 'youtube' ? api.searchYoutube(q, 10) : api.search(q, 20);
+      req
         .then((data) => {
-          if (myId === reqId.current) {
+          if (myId !== reqId.current) return;
+          if (source === 'youtube') {
+            setYt(data.tracks || []);
+            setResults(null);
+          } else {
             setResults(data);
-            setLoading(false);
+            setYt(null);
           }
+          setLoading(false);
         })
         .catch(() => {
-          if (myId === reqId.current) {
-            setError(true);
-            setLoading(false);
-          }
+          if (myId !== reqId.current) return;
+          setError(true);
+          setLoading(false);
         });
     }, 350);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, source]);
 
-  const hasResults =
+  const hasDeezer =
     results && (results.artists.length || results.albums.length || results.tracks.length);
+  const q = query.trim();
+
+  const Toggle = ({ value: v, label }) => (
+    <button
+      onClick={() => setSource(v)}
+      className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+        source === v ? 'bg-accent text-white' : 'text-muted active:text-white'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="px-3 pt-3">
-      <SearchBar value={query} onChange={setQuery} onSubmit={setQuery} />
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        onSubmit={setQuery}
+        placeholder={source === 'youtube' ? 'Search YouTube Music…' : 'Search Deezer…'}
+      />
 
-      {!query.trim() && (
-        <div className="mt-32 flex flex-col items-center px-10 text-center text-gray-500">
-          <SearchIcon className="mb-3 h-10 w-10" />
-          <p>Search Deezer to discover and download music</p>
+      {ytEnabled && (
+        <div className="mt-2 flex w-max gap-1 rounded-full bg-card p-1">
+          <Toggle value="deezer" label="Deezer" />
+          <Toggle value="youtube" label="YouTube" />
         </div>
       )}
 
-      {query.trim() && loading && <div className="mt-16 text-center text-gray-500">Searching…</div>}
-      {query.trim() && error && (
-        <div className="mt-16 text-center text-red-400">Search failed. Pull to retry.</div>
-      )}
-      {query.trim() && !loading && !error && results && !hasResults && (
-        <div className="mt-16 text-center text-gray-500">No results for “{query.trim()}”.</div>
+      {!q && (
+        <div className="mt-32 flex flex-col items-center px-10 text-center text-muted">
+          <SearchIcon className="mb-3 h-10 w-10" />
+          <p>{source === 'youtube' ? 'Search YouTube Music' : 'Search Deezer to discover music'}</p>
+        </div>
       )}
 
-      {results && hasResults && (
+      {q && loading && <div className="mt-16 text-center text-muted">Searching…</div>}
+      {q && error && (
+        <div className="mt-16 text-center text-error">Search failed. Try again.</div>
+      )}
+
+      {/* Deezer results */}
+      {source === 'deezer' && q && !loading && !error && results && !hasDeezer && (
+        <div className="mt-16 text-center text-muted">No results for “{q}”.</div>
+      )}
+      {source === 'deezer' && results && hasDeezer && (
         <div className="mt-4 space-y-7 pb-4">
           {results.artists.length > 0 && (
             <ExpandableSection title="Artists" items={results.artists}>
@@ -137,6 +172,19 @@ export default function SearchPage() {
               )}
             </ExpandableSection>
           )}
+        </div>
+      )}
+
+      {/* YouTube results */}
+      {source === 'youtube' && q && !loading && !error && yt && (
+        <div className="mt-7 pb-4">
+          <Section title="YouTube Music">
+            {yt.length === 0 ? (
+              <div className="py-6 text-center text-muted">No YouTube results.</div>
+            ) : (
+              yt.map((t) => <TrackRow key={t.yt_id} track={{ ...t, source: 'youtube' }} />)
+            )}
+          </Section>
         </div>
       )}
     </div>

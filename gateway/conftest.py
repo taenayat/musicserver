@@ -2,31 +2,29 @@
 Shared pytest fixtures + fakes for the gateway backend.
 
 Lives at the package root so `import main` resolves and so the env vars
-navidrome.py reads at import time are set before any test module loads it.
+navidrome.py / auth.py read at import time are set before any test module loads.
 """
 
 import os
 import sys
 
-# Make `import main` etc. work no matter where pytest is invoked from.
 sys.path.insert(0, os.path.dirname(__file__))
 
-# navidrome.py reads these at import; main.py imports navidrome. Set first.
+# Read at import time by navidrome.py (env) / used by auth.py (Fernet key).
 os.environ.setdefault("NAVIDROME_USER", "admin")
 os.environ.setdefault("NAVIDROME_PASS", "secret")
 os.environ.setdefault("NAVIDROME_URL", "http://navidrome:4533")
-os.environ.setdefault("GATEWAY_API_KEY", "test-key-123")
 os.environ.setdefault("DEEZER_ARL", "deadbeefarl")
 
 import httpx
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 
-API_KEY = os.environ["GATEWAY_API_KEY"]
-AUTH = {"Authorization": f"Bearer {API_KEY}"}
+os.environ.setdefault("GATEWAY_SECRET_KEY", Fernet.generate_key().decode())
 
 
-# ── Raw Deezer sample payloads (what the real API returns) ─────────────────────
+# ── Raw Deezer sample payloads ─────────────────────────────────────────────
 
 RAW_ARTIST = {
     "id": 27,
@@ -63,11 +61,9 @@ RAW_TRACK = {
 }
 
 
-# ── Fakes ──────────────────────────────────────────────────────────────────────
+# ── Fakes ────────────────────────────────────────────────────────────────────
 
 class FakeDeezer:
-    """Stand-in for DeezerClient with canned, per-test-overridable responses."""
-
     def __init__(self):
         self.artist = dict(RAW_ARTIST)
         self.albums = [dict(RAW_ALBUM)]
@@ -80,6 +76,7 @@ class FakeDeezer:
             "albums": [],
             "tracks": [],
         }
+        self._cache = {}
 
     async def search(self, query, limit=20):
         return self.search_result
@@ -135,8 +132,6 @@ class FakeResponse:
 
 
 class FakeHTTP:
-    """Stand-in for the module-level httpx client used by preview/cover."""
-
     def __init__(self):
         self.stream_chunks = [b"AUDIO", b"BYTES"]
         self.get_response = FakeResponse()
@@ -164,15 +159,30 @@ async def database(tmp_path):
 
 @pytest_asyncio.fixture
 async def client():
-    """
-    Async HTTP client bound to the app over ASGITransport — runs on the SAME
-    event loop as the test, so aiosqlite connections created in-test are usable.
-    Lifespan is NOT started; services are injected via dependency_overrides.
-    """
+    """ASGITransport client on the test event loop; lifespan NOT started."""
     import main
     transport = httpx.ASGITransport(app=main.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture
+def as_user():
+    """Override get_current_user to return a regular user. Returns the user dict."""
+    import main
+    user = {"id": 1, "username": "user", "role": "user", "navidrome_id": "nv1",
+            "password_hash": "x", "navidrome_user": "user", "navidrome_pass": None}
+    main.app.dependency_overrides[main.get_current_user] = lambda: user
+    return user
+
+
+@pytest.fixture
+def as_admin():
+    import main
+    user = {"id": 1, "username": "admin", "role": "admin", "navidrome_id": "nv1",
+            "password_hash": "x", "navidrome_user": "admin", "navidrome_pass": None}
+    main.app.dependency_overrides[main.get_current_user] = lambda: user
+    return user
 
 
 @pytest.fixture(autouse=True)

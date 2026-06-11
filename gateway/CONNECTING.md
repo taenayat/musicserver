@@ -39,6 +39,22 @@ Both services are running on the VPS (`167.233.30.70`):
 3. Save and let it sync. Everything in `/music` (including freshly downloaded
    tracks) plays in full, with scrobbling/starring handled by Navidrome.
 
+### Making new music appear automatically
+
+The gateway always asks Navidrome to rescan after a download, so new tracks are
+available on the server within seconds. **Symfonium**, however, caches its own
+copy of the library and only re-pulls on its own schedule — the Subsonic
+protocol has no way for the server to push a refresh. So after a download you
+either pull-to-refresh in Symfonium, or (recommended) turn on its background
+sync so it refreshes on its own:
+
+- **Symfonium → Settings → Library → (your Navidrome source) → Background sync**
+  — enable it and set a short interval (e.g. every 15–30 minutes, or "on app
+  open"). New downloads then show up without any manual refresh.
+
+> Why not instant? Navidrome (and every Subsonic server) is pull-only. The
+> gateway keeps Navidrome current; the client decides when to re-sync.
+
 > First time only: if Navidrome's admin account isn't created yet, open
 > `http://167.233.30.70:4533` in a browser and create it with **exactly** these
 > same credentials.
