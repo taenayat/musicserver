@@ -116,27 +116,27 @@ def write_lrc_sidecar(audio_abs_path: str, lrc_text: str) -> bool:
         return False
 
 
-async def get_synced_lrc(http, db, deezer_track_id: int, title: str, artist: str,
-                         album: Optional[str], duration_sec: Optional[int]
-                         ) -> Optional[str]:
-    """Return raw synced LRC text (or None) for writing a .lrc sidecar.
+async def get_sidecar_lrc(http, db, deezer_track_id: int, title: str, artist: str,
+                          album: Optional[str], duration_sec: Optional[int]
+                          ) -> Optional[str]:
+    """Return the best LRC text to write as a .lrc sidecar, or None.
 
-    Uses the lyrics_cache when present, otherwise hits lrclib (the only synced
-    source) and caches the result. Genius is plain-only, so it can't produce a
-    synced sidecar and is intentionally skipped here.
+    Prefers synced (timestamped) lyrics; falls back to plain (unsynced) text —
+    Navidrome serves a no-timestamp .lrc as unsynced lyrics, which Symfonium
+    still shows, so plain is better than nothing (e.g. for Persian tracks where
+    lrclib only has plain). Uses the lyrics_cache when present, else hits lrclib.
     """
     if deezer_track_id:
         cached = await db.get_lyrics(deezer_track_id)
         if cached:
-            return cached.get("synced")
+            return cached.get("synced") or cached.get("plain")
 
     lrc = await _fetch_lrclib(http, artist, title, album, duration_sec)
     synced = lrc.get("synced") if lrc else None
     plain = lrc.get("plain") if lrc else None
     if deezer_track_id and (synced or plain):
-        await db.upsert_lyrics(deezer_track_id, synced, plain,
-                               "lrclib" if (synced or plain) else None)
-    return synced
+        await db.upsert_lyrics(deezer_track_id, synced, plain, "lrclib")
+    return synced or plain
 
 
 async def fetch_lyrics(http, db, deezer_track_id: int, title: str, artist: str,

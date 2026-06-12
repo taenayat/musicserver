@@ -936,7 +936,7 @@ async def api_lyrics_backfill(admin: dict = Depends(require_admin),
             continue
         if os.path.isfile(lyrics_mod.lrc_sidecar_path(abs_path)):
             continue
-        lrc = await lyrics_mod.get_synced_lrc(
+        lrc = await lyrics_mod.get_sidecar_lrc(
             http, store, t.get("deezer_id") or 0,
             t.get("title") or "", t.get("artist") or "",
             t.get("album"), t.get("duration_sec"))

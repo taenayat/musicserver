@@ -305,7 +305,7 @@ class Downloader:
             # Only a real per-track Deezer id is a valid lyrics-cache key; album
             # downloads carry the album id, so don't use it as a track key.
             dz_track_id = job.get("deezer_id") if is_track else 0
-            lrc = await lyrics_mod.get_synced_lrc(
+            lrc = await lyrics_mod.get_sidecar_lrc(
                 self.http, self.db, dz_track_id or 0,
                 tags.get("title") or "", tags.get("artist") or "",
                 tags.get("album"), tags.get("duration_sec"))
