@@ -22,7 +22,7 @@
 - [x] 4.1 In `lyrics.py`, expose the raw synced LRC text (in addition to the parsed list) from the fetch path.
 - [x] 4.2 Add a helper to write a `<basename>.lrc` sidecar next to an audio file.
 - [x] 4.3 In `downloader.py:_finish_permanent`, after indexing each track, fetch lyrics and write a sidecar when synced LRC exists (non-blocking of the file landing).
-- [ ] 4.4 Confirm the existing post-download Navidrome scan picks up the sidecar.
+- [x] 4.4 Confirm the existing post-download Navidrome scan picks up the sidecar.
 
 ## 5. Lyrics sidecar backfill
 
@@ -36,5 +36,5 @@
 
 ## 7. Build & verify
 
-- [ ] 7.1 Rebuild frontend + gateway image.
+- [x] 7.1 Rebuild frontend + gateway image.
 - [ ] 7.2 Verify in Symfonium: a newly downloaded track shows art and (where available) lyrics; backfills populate existing tracks.

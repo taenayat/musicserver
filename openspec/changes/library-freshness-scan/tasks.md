@@ -26,6 +26,6 @@
 
 ## 6. Verify
 
-- [ ] 6.1 Trigger a scan with Navidrome up: UI confirms success and shows scanning/last-scan.
+- [x] 6.1 Trigger a scan with Navidrome up: UI confirms success and shows scanning/last-scan.
 - [ ] 6.2 Trigger a scan with Navidrome unreachable: UI reports failure.
 - [ ] 6.3 With Symfonium background sync enabled, confirm a new download appears without manual refresh within the sync window.

@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# deno: yt-dlp needs a JS runtime to extract current YouTube formats. Without it
+# newer yt-dlp warns "No supported JavaScript runtime" and formats go missing.
+# The static binary from the official image is enough.
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

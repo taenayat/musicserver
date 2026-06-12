@@ -22,15 +22,33 @@ def is_enabled() -> bool:
     return os.environ.get("YTDLP_ENABLED", "true").lower() in ("1", "true", "yes")
 
 
+def _cookie_opts() -> dict:
+    """yt-dlp options for a cookies file, when YTDLP_COOKIES_FILE points to one.
+
+    YouTube blocks datacenter IPs with a 'confirm you're not a bot' wall; a
+    cookies.txt exported from a logged-in browser gets past it. Absent/invalid
+    path → empty dict (no cookies), so search still works without it.
+    """
+    cf = os.environ.get("YTDLP_COOKIES_FILE", "").strip()
+    if cf and os.path.isfile(cf):
+        return {"cookiefile": cf}
+    if cf:
+        log.warning("YTDLP_COOKIES_FILE set but not found: %s", cf)
+    return {}
+
+
 def _search_sync(query: str, limit: int) -> list[dict]:
     import yt_dlp
 
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "extract_flat": True,
+        # 'in_playlist' expands the search into flat entries. Plain True returns a
+        # single unresolved url-reference with no entries (search yields nothing).
+        "extract_flat": "in_playlist",
         "default_search": f"ytsearch{limit}:",
         "skip_download": True,
+        **_cookie_opts(),
     }
     results = []
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -104,6 +122,11 @@ def _download_sync(yt_id: str, dest_dir: str, artist: str, album: str) -> str:
         "quiet": True,
         "no_warnings": True,
         "progress_hooks": [hook],
+        # YouTube now gates audio/video formats behind a JS signature challenge.
+        # yt-dlp solves it with deno (in the image) + the EJS solver script it
+        # fetches from GitHub on first use. Without this, "only images available".
+        "remote_components": ["ejs:github"],
+        **_cookie_opts(),
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([f"https://www.youtube.com/watch?v={yt_id}"])

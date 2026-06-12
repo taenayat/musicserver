@@ -24,6 +24,6 @@
 
 ## 5. Build & verify
 
-- [ ] 5.1 Rebuild frontend + gateway image.
+- [x] 5.1 Rebuild frontend + gateway image.
 - [ ] 5.2 Run the scan on a library with known art-less tracks; confirm they're listed with proposed covers.
 - [ ] 5.3 Apply to a subset and to "select all"; confirm art embeds, the list shrinks, and Symfonium shows the new art after sync.
