@@ -3,12 +3,13 @@
 .env.*
 *.local
 # (env.example is intentionally tracked as the template)
+youtube-cookies.txt
 
-# ── Music library & runtime data (large / generated, not source) ──────
+# ── Runtime data created by docker compose (bind mounts) ──────────────
 /music/
 /data/
 
-# ── Python (gateway) ──────────────────────────────────────────────────
+# ── Python ────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/

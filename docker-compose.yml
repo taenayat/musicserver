@@ -11,7 +11,6 @@ services:
     image: deluan/navidrome:latest
     container_name: navidrome
     restart: unless-stopped
-    #user: "${PUID}:${PGID}"
     networks: [music_net]
     ports:
       - "4533:4533"
@@ -30,7 +29,7 @@ services:
           memory: 256M
 
   gateway:
-    build: ./gateway
+    build: .
     container_name: gateway
     restart: unless-stopped
     networks: [music_net]
