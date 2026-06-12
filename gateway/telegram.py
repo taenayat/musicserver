@@ -98,6 +98,15 @@ class TelegramClient:
                 async for chunk in resp.aiter_bytes():
                     fh.write(chunk)
 
+    async def send_message(self, chat_id, text: str) -> None:
+        """Best-effort plain-text reply (used to confirm DM imports)."""
+        try:
+            await self.http.post(f"{self._api}/sendMessage",
+                                 data={"chat_id": chat_id, "text": text[:4000]},
+                                 timeout=15.0)
+        except Exception as exc:
+            log.warning("telegram sendMessage failed: %s", exc)
+
     async def delete_message(self, msg_id: int) -> bool:
         try:
             r = await self.http.post(f"{self._api}/deleteMessage",
@@ -178,6 +187,20 @@ class TelegramClient:
             }
         return None
 
+    async def _maybe_help_reply(self, msg: dict) -> None:
+        """Reply to a /start or stray text in a private chat so the user knows
+        how to use the bot. Ignored for channel posts and non-text messages."""
+        chat = msg.get("chat") or {}
+        if chat.get("type") != "private":
+            return
+        text = (msg.get("text") or "").strip()
+        if not text:
+            return
+        await self.send_message(
+            chat.get("id"),
+            "🎵 Send or forward an audio file here and I'll add it to the music "
+            "library. (Max ~20 MB per file.)")
+
     async def _inbound_loop(self, on_audio, get_offset, set_offset) -> None:
         offset = await get_offset()
         while True:
@@ -205,6 +228,8 @@ class TelegramClient:
                                 await on_audio(audio, msg)
                             except Exception as exc:
                                 log.error("telegram inbound handler failed: %s", exc)
+                        else:
+                            await self._maybe_help_reply(msg)
                     await set_offset(offset)
             except asyncio.CancelledError:
                 raise

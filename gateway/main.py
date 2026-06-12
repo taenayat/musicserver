@@ -143,13 +143,23 @@ async def _tg_set_offset(offset: int) -> None:
 
 
 async def _telegram_import_audio(audio: dict, msg: dict) -> None:
-    """Import one audio message from the channel into the library."""
+    """Import one audio message (DM to the bot or channel post) into the library."""
+    chat = msg.get("chat") or {}
+    is_private = chat.get("type") == "private"
+
+    async def reply(text: str) -> None:
+        # Only confirm back in a direct chat with the bot, not in the channel.
+        if is_private and telegram:
+            await telegram.send_message(chat.get("id"), text)
+
     if audio.get("from_bot"):
         return  # the gateway's own uploads — ignore to avoid an import/upload loop
     size = audio.get("file_size") or 0
     if size and size > _TG_MAX_BYTES:
         log.warning("telegram import: %.1f MB exceeds Bot API getFile limit; skipping",
                     size / 1e6)
+        await reply(f"⚠️ That file is {size/1e6:.0f} MB — over the ~20 MB bot limit, "
+                    "so I can't load it.")
         return
 
     performer = audio.get("performer") or "Unknown Artist"
@@ -173,6 +183,7 @@ async def _telegram_import_audio(audio: dict, msg: dict) -> None:
         except OSError:
             pass
         log.info("telegram import: duplicate of %s, skipped", existing["file_path"])
+        await reply(f"ℹ️ Already in the library: {tags.get('title') or rel}")
         return
 
     await db.upsert_library_track(file_path=rel, location="local", **tags)
@@ -180,8 +191,19 @@ async def _telegram_import_audio(audio: dict, msg: dict) -> None:
     await db.set_telegram_backed(rel, msg.get("message_id"), audio["file_id"])
     await db.add_telegram_file(rel, msg.get("message_id"), audio["file_id"],
                                tags.get("file_size_mb"))
+    # Write a lyrics sidecar too, so DM-imported tracks get lyrics in Symfonium.
+    try:
+        if lyrics_mod.is_enabled():
+            lrc = await lyrics_mod.get_sidecar_lrc(
+                http, db, 0, tags.get("title") or "", tags.get("artist") or "",
+                tags.get("album"), tags.get("duration_sec"))
+            if lrc:
+                await asyncio.to_thread(lyrics_mod.write_lrc_sidecar, dest, lrc)
+    except Exception as exc:
+        log.warning("telegram import: lyrics sidecar failed for %s: %s", rel, exc)
     await navidrome.trigger_scan()
     log.info("telegram import: added %s", rel)
+    await reply(f"✅ Added: {tags.get('artist') or ''} — {tags.get('title') or rel}")
 
 
 @asynccontextmanager
